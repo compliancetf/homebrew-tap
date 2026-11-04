@@ -1,0 +1,43 @@
+name: update-formula
+
+# Points Formula/ctfkit.rb at the latest compliancetf/ctfkit release, after
+# checking the provenance of each binary. Runs daily, by hand, and when the
+# ctfkit release workflow dispatches it. It commits only when the formula changed.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: ctfkit release tag, such as v1.2.3 (default the latest release)
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: update-formula
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Render the formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: ./scripts/update-formula.sh ${TAG:+"$TAG"}
+      - name: Commit a changed formula
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then echo "The formula is current."; exit 0; fi
+          version=$(sed -n "s/.* from the v\([0-9.]*\) release .*/\1/p" Formula/ctfkit.rb)
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -am "ctfkit ${version}"
+          git push origin HEAD:main
